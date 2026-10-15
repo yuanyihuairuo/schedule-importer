@@ -1,0 +1,50 @@
+{
+  "name": "schedule-importer",
+  "version": "1.0.0",
+  "description": "把课表转成 .ics 日历文件，导入 iPhone / iPad / Mac 后经 iCloud 自动同步。单文件、零依赖、不联网。",
+  "keywords": [
+    "课表",
+    "ical",
+    "ics",
+    "calendar",
+    "apple",
+    "icloud",
+    "offline",
+    "single-file",
+    "no-dependencies",
+    "privacy"
+  ],
+  "license": "MIT",
+  "author": "YUANYIHUAIRUO",
+  "type": "commonjs",
+  "engines": {
+    "node": ">=18"
+  },
+  "main": "dist/课表导入器.html",
+  "files": [
+    "dist",
+    "src",
+    "tools",
+    "docs",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "build": "node tools/build.js",
+    "test": "npm run test:core && npm run test:xlsx && npm run test:ui",
+    "test:core": "node tests/test-core.js",
+    "test:xlsx": "node tests/test-xlsx.js",
+    "test:ui": "node tests/test-ui.js",
+    "fixtures": "python3 tools/make-fixtures.py",
+    "previews": "node tools/gen-preview.js",
+    "sample:xlsx": "node tools/make-sample-xlsx.js",
+    "check:align": "python3 tools/check-align.py",
+    "screenshots": "npm run previews && npm run screenshots:iphone && npm run screenshots:desktop",
+    "screenshots:iphone": "python3 tools/phone-shot.py",
+    "screenshots:desktop": "bash tools/screenshot-desktop.sh",
+    "verify": "npm run build && npm test"
+  },
+  "devDependencies": {
+    "jsdom": "^26.0.0"
+  }
+}

@@ -1,0 +1,19 @@
+# ── 行尾：必须按原样存取，不要让 git 规范化 ──────────────────
+#
+# tests/baseline.ics 是 UID 基线，测试要拿它和生成的输出**逐字节**比对。
+# 它用 CRLF（RFC 5545 规定日历文件必须 CRLF）。如果 git 在 checkout 时
+# 规范化成 LF，比对必然失败 —— 而且这个坑只在「克隆仓库后」才暴露，
+# 在自己机器上怎么测都是好的。
+*.ics -text
+
+# 二进制，一律不做任何转换
+*.xlsx binary
+*.png binary
+
+# 源码统一按 LF
+*.js   text eol=lf
+*.json text eol=lf
+*.md   text eol=lf
+*.py   text eol=lf
+*.sh   text eol=lf
+*.html text eol=lf

@@ -1,0 +1,1254 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<meta name="theme-color" content="#4f46e5" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0d0f15" media="(prefers-color-scheme: dark)">
+<meta name="format-detection" content="telephone=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="课表导入器">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="description" content="把课表转成 .ics 日历文件，导入 iPhone / iPad / Mac 后经 iCloud 自动同步。全部在本地完成，不联网、不上传。">
+<title>课表导入器 · 导出到 Apple 日历</title>
+<style>
+/* ═══════════════════════════════════════════════════════════
+   设计令牌
+   —— 一套变量同时驱动浅色与深色，改一处全局生效
+   ═══════════════════════════════════════════════════════════ */
+:root{
+  color-scheme:light dark;
+
+  /* 表面 */
+  --bg:#f1f3f9;      --bg-2:#e7ebf6;
+  --card:#ffffff;    --card-2:#fafbfe;   --sunken:#f3f5fa;
+  --glass:rgba(255,255,255,.82);
+
+  /* 文字 */
+  --ink:#0e1220;     --ink2:#4c5464;     --ink3:#8a92a3;
+
+  /* 描边 */
+  --line:#e7eaf1;    --line2:#d4d9e4;
+
+  /* 品牌 */
+  --brand:#4f46e5;   --brand-d:#4338ca;
+  --brand-l:#eef1ff; --brand-l2:#dfe4ff;
+  --code-bg:#eef0f5;
+
+  /* 语义 */
+  --ok:#04875f;   --ok-l:#e9f9f2;   --ok-b:#a9e7cf;
+  --warn:#a45a09; --warn-l:#fff8e9; --warn-b:#fbe2a8;
+  --err:#cf1f2b;  --err-l:#fef1f2;  --err-b:#f9c9cd;
+  --info:#0a6b8f; --info-l:#eef8fd; --info-b:#b7e1f3;
+
+  /* 顶栏渐变 */
+  --hero-1:#5b52ea; --hero-2:#6f6bf1; --hero-3:#918ef8;
+
+  /* 圆角：比原先更大，iOS 观感 */
+  --r:20px; --r2:14px; --r3:10px;
+
+  /* 分层阴影，比单层投影更“立体” */
+  --sh-1:0 1px 2px rgba(15,23,42,.05), 0 1px 3px rgba(15,23,42,.05);
+  --sh-2:0 2px 8px -2px rgba(15,23,42,.07), 0 12px 28px -10px rgba(15,23,42,.14);
+  --sh-btn:0 1px 2px rgba(79,70,229,.2), 0 8px 20px -8px rgba(79,70,229,.55);
+
+  /* iOS 安全区（刘海 / Home 指示条） */
+  --sat:env(safe-area-inset-top,0px);
+  --sab:env(safe-area-inset-bottom,0px);
+  --sal:env(safe-area-inset-left,0px);
+  --sar:env(safe-area-inset-right,0px);
+}
+
+@media (prefers-color-scheme:dark){
+  :root{
+    --bg:#0d0f15;      --bg-2:#151925;
+    --card:#171a23;    --card-2:#1b1f2a;   --sunken:#12151e;
+    --glass:rgba(23,26,35,.84);
+
+    --ink:#edf0f6;     --ink2:#a8b1c0;     --ink3:#78818f;
+
+    --line:#252a36;    --line2:#333949;
+
+    /* 深色下「填充色」要压暗才有白字对比度，而「文字色」要提亮 */
+    --brand:#5f59e8;   --brand-d:#a5a2ff;
+    --brand-l:#232447; --brand-l2:#2e3059;
+    --code-bg:#232733;
+
+    --ok:#3fd39f;   --ok-l:#0f2a21;   --ok-b:#1e4a3a;
+    --warn:#f0b357; --warn-l:#2a2113; --warn-b:#4a3a1c;
+    --err:#ff8189;  --err-l:#2b171a;  --err-b:#4d262b;
+    --info:#6ec8ef; --info-l:#0f2531; --info-b:#1d4152;
+
+    --hero-1:#37318c; --hero-2:#453fae; --hero-3:#5c56d2;
+
+    --sh-1:0 1px 2px rgba(0,0,0,.5);
+    --sh-2:0 2px 8px rgba(0,0,0,.45), 0 12px 28px -10px rgba(0,0,0,.6);
+    --sh-btn:0 1px 2px rgba(0,0,0,.4), 0 8px 20px -8px rgba(0,0,0,.55);
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════
+   基础
+   ═══════════════════════════════════════════════════════════ */
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{
+  margin:0;
+  background:linear-gradient(180deg,var(--bg-2) 0,var(--bg) min(440px,55vh)) no-repeat,var(--bg);
+  color:var(--ink);
+  font:16px/1.65 -apple-system,BlinkMacSystemFont,"SF Pro SC","SF Pro Text",
+       "PingFang SC","Hiragino Sans GB","Microsoft YaHei",system-ui,sans-serif;
+  -webkit-font-smoothing:antialiased;
+  -moz-osx-font-smoothing:grayscale;
+  overflow-x:hidden;
+  padding-left:var(--sal);
+  padding-right:var(--sar);
+}
+h1,h2,h3{margin:0;font-weight:650;line-height:1.35;letter-spacing:-.01em}
+p{margin:0}
+code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.86em;
+  background:var(--code-bg);padding:1.5px 6px;border-radius:6px;color:var(--ink2)}
+::selection{background:var(--brand-l2);color:var(--brand-d)}
+:focus-visible{outline:2px solid var(--brand);outline-offset:2px}
+@media (prefers-reduced-motion:reduce){
+  *,*::before,*::after{transition-duration:.01ms !important;animation-duration:.01ms !important}
+}
+
+/* ═══════════════════════════════════════════════════════════
+   顶栏
+   ═══════════════════════════════════════════════════════════ */
+.hero{
+  position:relative;overflow:hidden;text-align:center;
+  background:linear-gradient(155deg,var(--hero-1),var(--hero-2) 55%,var(--hero-3));
+  color:#fff;
+  padding:calc(var(--sat) + 40px) 20px 54px;
+  border-radius:0 0 30px 30px;
+}
+.hero::before,.hero::after{
+  content:'';position:absolute;border-radius:50%;pointer-events:none;
+  background:radial-gradient(circle,rgba(255,255,255,.2),transparent 68%);
+}
+.hero::before{width:360px;height:360px;top:-190px;left:-100px}
+.hero::after{width:280px;height:280px;bottom:-160px;right:-80px}
+.hero>*{position:relative}
+.hero .mark{
+  width:54px;height:54px;margin:0 auto 15px;border-radius:17px;
+  display:flex;align-items:center;justify-content:center;
+  background:rgba(255,255,255,.18);border:1px solid rgba(255,255,255,.3);
+  box-shadow:0 10px 26px -10px rgba(0,0,0,.45);
+  -webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px);
+}
+.hero h1{font-size:28px;font-weight:700;letter-spacing:-.02em}
+.hero .sub{margin-top:9px;font-size:14.5px;opacity:.92;line-height:1.6;
+  max-width:32em;margin-left:auto;margin-right:auto;text-wrap:balance}
+.hero .privacy{margin-top:16px;display:inline-block;font-size:12.5px;
+  background:rgba(255,255,255,.16);border:1px solid rgba(255,255,255,.28);
+  padding:6px 14px;border-radius:999px;
+  -webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px)}
+
+/* ═══════════════════════════════════════════════════════════
+   步骤条（上浮压住顶栏，移动端吸顶）
+   ═══════════════════════════════════════════════════════════ */
+.steps{
+  display:flex;gap:4px;
+  width:calc(100% - 32px);max-width:948px;
+  margin:-30px auto 0;padding:5px;
+  background:var(--card);border:1px solid var(--line);
+  border-radius:18px;box-shadow:var(--sh-2);
+  position:relative;z-index:5;
+  overflow-x:auto;scrollbar-width:none;-webkit-overflow-scrolling:touch;
+}
+.steps::-webkit-scrollbar{display:none}
+.step{
+  flex:1 1 0;min-width:0;min-height:44px;
+  display:flex;align-items:center;justify-content:center;gap:8px;
+  padding:9px 8px;border:0;border-radius:14px;
+  background:transparent;color:var(--ink2);box-shadow:none;
+  font-size:13.5px;font-weight:550;white-space:nowrap;
+  transition:background .18s,color .18s;
+}
+.step .num{
+  width:22px;height:22px;flex:none;border-radius:50%;
+  display:flex;align-items:center;justify-content:center;
+  background:var(--sunken);color:var(--ink3);
+  font-size:12px;font-weight:700;
+  transition:background .18s,color .18s,box-shadow .18s;
+}
+.step:hover{background:var(--sunken)}
+.step.on{background:var(--brand-l);color:var(--brand-d);font-weight:650}
+.step.on .num{background:var(--brand);color:#fff;
+  box-shadow:0 2px 8px -2px rgba(79,70,229,.7)}
+.step.done .num{background:var(--ok);color:#fff}
+
+/* 步骤名：窄屏用两字版，省得横向滚动 */
+.lbl-s{display:none}
+
+/* ═══════════════════════════════════════════════════════════
+   布局
+   ═══════════════════════════════════════════════════════════ */
+main{max-width:980px;margin:0 auto;padding:18px 16px calc(28px + var(--sab))}
+.panel{animation:panelIn .3s cubic-bezier(.22,1,.36,1)}
+@keyframes panelIn{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
+
+.card{
+  background:var(--card);border:1px solid var(--line);
+  border-radius:var(--r);padding:20px;margin-bottom:16px;
+  box-shadow:var(--sh-1);
+}
+/* 注意用后代选择器：`.sec-head` 里的 h2 不是 .card 的直接子元素，
+   写成 .card>h2 会漏掉它，于是落到浏览器默认的 24px 上 */
+.card h2{font-size:16.5px;margin-bottom:4px;
+  display:flex;align-items:center;gap:9px;flex-wrap:wrap}
+.card-head{display:flex;align-items:center;justify-content:space-between;
+  gap:10px;margin-bottom:12px;flex-wrap:wrap}
+.badge{display:inline-block;background:var(--brand-l);color:var(--brand-d);
+  font-size:12px;font-weight:650;padding:2.5px 10px;border-radius:999px;
+  line-height:1.6;vertical-align:1px}
+.hint{color:var(--ink3);font-size:13.5px;margin-top:8px}
+.hint b,.hint code{color:var(--ink2);background:var(--code-bg)}
+.sub-h{font-size:13.5px;font-weight:650;color:var(--ink2);margin:18px 0 8px}
+
+/* ═══════════════════════════════════════════════════════════
+   表单
+   —— 字号统一 16px：iOS Safari 在小于 16px 的输入框上聚焦会自动放大页面
+   ═══════════════════════════════════════════════════════════ */
+.grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:14px}
+label.f{display:flex;flex-direction:column;gap:7px;font-size:13.5px;
+  color:var(--ink2);font-weight:500}
+
+input,select,textarea{
+  font-family:inherit;font-size:16px;color:var(--ink);
+  background-color:var(--card);border:1px solid var(--line2);border-radius:12px;
+  padding:11px 13px;width:100%;min-height:46px;
+  -webkit-appearance:none;appearance:none;
+  transition:border-color .16s,box-shadow .16s,background-color .16s;
+}
+select{
+  background-image:url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1.5 6 6.5 11 1.5' fill='none' stroke='%238b93a4' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-repeat:no-repeat;background-position:right 13px center;
+  padding-right:38px;
+}
+textarea{resize:vertical;line-height:1.6;font-size:15px;min-height:0}
+input:focus,select:focus,textarea:focus{
+  outline:none;border-color:var(--brand);box-shadow:0 0 0 4px var(--brand-l)}
+input::placeholder,textarea::placeholder{color:var(--ink3)}
+input[type=checkbox],input[type=radio]{
+  -webkit-appearance:auto;appearance:auto;
+  width:20px;height:20px;min-height:0;flex:none;margin:0;padding:0;
+  accent-color:var(--brand)}
+input[type=date],input[type=time]{-webkit-appearance:auto;appearance:auto}
+label.chk{display:flex;align-items:center;gap:10px;font-size:14.5px;
+  color:var(--ink2);margin-top:12px;cursor:pointer;min-height:44px}
+
+/* ═══════════════════════════════════════════════════════════
+   按钮
+   ═══════════════════════════════════════════════════════════ */
+button{
+  font-family:inherit;font-size:14.5px;font-weight:550;cursor:pointer;
+  border-radius:12px;border:1px solid var(--line2);
+  background-color:var(--card);color:var(--ink);
+  padding:10px 16px;min-height:42px;white-space:nowrap;
+  -webkit-tap-highlight-color:transparent;touch-action:manipulation;
+  transition:background-color .16s,border-color .16s,transform .12s,
+             box-shadow .16s,opacity .16s,color .16s;
+}
+button:hover{background-color:var(--sunken)}
+button:active{transform:scale(.97)}
+button.primary{
+  background:var(--brand);border-color:transparent;color:#fff;
+  box-shadow:var(--sh-btn),inset 0 1px 0 rgba(255,255,255,.16)}
+button.primary:hover{background:var(--brand-d)}
+button.ghost{color:var(--ink2)}
+button.ghost:hover{color:var(--ink)}
+button.small{padding:8px 13px;font-size:13.5px;min-height:38px;border-radius:10px}
+button.big{width:100%;font-size:16.5px;font-weight:650;padding:16px;
+  min-height:54px;border-radius:14px;margin-bottom:10px}
+button.link{background:none;border:none;color:var(--brand);padding:8px;
+  font-size:13.5px;min-height:38px;box-shadow:none}
+button.link:hover{background:var(--brand-l)}
+/* 每行都挂一个删除按钮，常显红色会把整张表的注意力带走 —— 平时压低，
+   指针移上去或键盘聚焦时才变红。手机端另有一版整行铺开的红底按钮。 */
+button.link.danger{color:var(--ink3)}
+button.link.danger:hover{background:var(--err-l);color:var(--err)}
+button:disabled{opacity:.42;cursor:not-allowed;transform:none}
+.actions{display:flex;gap:10px;justify-content:space-between;margin-top:6px}
+.actions .right{margin-left:auto}
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+
+/* ═══════════════════════════════════════════════════════════
+   分段控件（页签 / 模板格式切换）
+   ═══════════════════════════════════════════════════════════ */
+.tabs{display:flex;gap:4px;margin-bottom:14px;background:var(--sunken);
+  padding:4px;border-radius:14px}
+.tabs button{flex:1;font-size:14px;padding:10px;border:0;background:transparent;
+  border-radius:11px;color:var(--ink2);min-height:42px;box-shadow:none}
+.tabs button.on{background:var(--card);color:var(--brand-d);font-weight:650;
+  box-shadow:var(--sh-1)}
+
+/* ═══════════════════════════════════════════════════════════
+   文件投放区
+   ═══════════════════════════════════════════════════════════ */
+.drop{border:2px dashed var(--line2);border-radius:var(--r2);
+  padding:34px 16px;text-align:center;color:var(--ink3);font-size:14.5px;
+  background:var(--card-2);cursor:pointer;
+  transition:border-color .18s,background-color .18s,color .18s}
+.drop:hover,.drop.over{border-color:var(--brand);background:var(--brand-l);
+  color:var(--brand-d)}
+
+/* ═══════════════════════════════════════════════════════════
+   表格（桌面）+ 卡片（手机）
+   ═══════════════════════════════════════════════════════════ */
+.table-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch;margin:0 -4px;padding:0 4px}
+table{border-collapse:collapse;width:100%;font-size:14px}
+th,td{padding:9px 10px;text-align:left;border-bottom:1px solid var(--line);
+  vertical-align:middle}
+th{font-size:12.5px;color:var(--ink3);font-weight:600;white-space:nowrap;
+  position:sticky;top:0;background-color:var(--card);z-index:1}
+tbody tr:last-child td{border-bottom:none}
+tbody tr:hover{background-color:var(--card-2)}
+td input,td select,td textarea,
+.table-wrap td input,.table-wrap td select{
+  font-size:15px;min-height:40px;border-radius:9px;
+  border-color:transparent;background-color:transparent;
+}
+/* ── ★ 表头与内容对齐 ──────────────────────────────────────────
+   表头文字从单元格左边 10px 处起排；而输入框自己还带 1px 边框 + 内边距，
+   如果单元格再留 10px 内边距，内容就会整体右移 11px（实测就是这么多的）。
+   做法：把横向内边距从单元格挪到控件身上 ——
+       4(单元格) + 1(边框) + 5(控件内边距) = 10，正好落回表头那条竖线。 */
+.table-wrap td.c-in{padding:6px 4px}
+.table-wrap td.c-in input,.table-wrap td.c-in select{padding:8px 5px}
+/* ── ★ 下拉箭头不要贴着文字 ────────────────────────────────────
+   原来 td 里的 select 被 `padding:8px 10px` 吃掉了右侧留白，
+   而箭头画在距右边缘 13px 处 —— 于是「周一」的最后一个字和箭头挨在一起。
+   现在文字右侧留 28px，箭头退到 9px，中间空出 7px。 */
+.table-wrap td.c-in select{padding-right:28px;background-position:right 9px center}
+.table-wrap td input:hover,.table-wrap td select:hover{
+  border-color:var(--line2);background-color:var(--card)}
+.table-wrap td input:focus,.table-wrap td select:focus{
+  background-color:var(--card);border-color:var(--brand)}
+.t-num{color:var(--ink3);font-size:12.5px;width:28px;
+  font-variant-numeric:tabular-nums}
+.t-c-uid{font-family:ui-monospace,Menlo,monospace;font-size:11.5px;color:var(--ink3)}
+.t-c-time{white-space:nowrap;font-variant-numeric:tabular-nums}
+.t-c-rr{color:var(--brand-d);font-size:12.5px}
+.t-c-weeks{color:var(--ink3);font-size:11.5px}
+.t-c-ct{color:var(--ink2);white-space:nowrap}
+
+/* ═══════════════════════════════════════════════════════════
+   提示条
+   ═══════════════════════════════════════════════════════════ */
+.nt{border-radius:var(--r2);padding:12px 14px;font-size:13.5px;margin:8px 0;
+  display:flex;gap:10px;align-items:flex-start;line-height:1.6;
+  border:1px solid transparent}
+.nt .ic{flex:none;font-size:14px;line-height:1.55}
+.nt.warn{background:var(--warn-l);border-color:var(--warn-b);color:var(--warn)}
+.nt.err{background:var(--err-l);border-color:var(--err-b);color:var(--err)}
+.nt.ok{background:var(--ok-l);border-color:var(--ok-b);color:var(--ok)}
+.nt.info{background:var(--info-l);border-color:var(--info-b);color:var(--info)}
+.nt .rowno{font-weight:650;flex:none}
+.nt b{font-weight:650}
+
+/* ═══════════════════════════════════════════════════════════
+   统计卡
+   ═══════════════════════════════════════════════════════════ */
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(126px,1fr));
+  gap:10px;margin:14px 0}
+.stat{background:var(--card-2);border:1px solid var(--line);
+  border-radius:var(--r2);padding:12px 14px}
+.stat .k{font-size:12.5px;color:var(--ink3);margin-bottom:3px}
+.stat .v{font-size:22px;font-weight:650;font-variant-numeric:tabular-nums;
+  letter-spacing:-.02em}
+.stat .v small{font-size:13px;font-weight:400;color:var(--ink3);margin-left:3px}
+
+/* ═══════════════════════════════════════════════════════════
+   步骤引导
+   ═══════════════════════════════════════════════════════════ */
+.guide{counter-reset:s;list-style:none;padding:0;margin:8px 0 0}
+.guide li{counter-increment:s;position:relative;padding:8px 0 8px 34px;
+  font-size:14.5px;color:var(--ink2)}
+.guide li::before{content:counter(s);position:absolute;left:0;top:9px;
+  width:22px;height:22px;line-height:22px;text-align:center;border-radius:50%;
+  background:var(--brand-l);color:var(--brand-d);font-size:11.5px;font-weight:700}
+.guide li b{color:var(--ink);font-weight:650}
+.kv{display:flex;gap:8px;font-size:13px;padding:4px 0;color:var(--ink2)}
+.kv .k{color:var(--ink3);flex:none;min-width:62px}
+
+.rule-row{display:grid;grid-template-columns:150px 1fr auto;gap:8px;
+  align-items:center;margin-bottom:8px}
+.rule-row.wide{grid-template-columns:150px 1fr 130px auto}
+.empty{color:var(--ink3);font-size:13.5px;padding:14px 0;text-align:center}
+
+/* ═══════════════════════════════════════════════════════════
+   上下课时间（作息表）
+   ═══════════════════════════════════════════════════════════ */
+.sec-head{display:flex;align-items:center;justify-content:space-between;
+  gap:12px;flex-wrap:wrap}
+.sec-head h2{flex:none}
+.sec-head select{width:auto;flex:0 1 320px;min-width:200px;font-size:14px;
+  padding:9px 11px;padding-right:36px;min-height:42px}
+.slot-grp{margin:16px 0 0}
+.slot-grp-h{display:flex;align-items:center;gap:8px;font-size:12.5px;
+  color:var(--ink3);margin-bottom:8px}
+.slot-grp-h::after{content:'';flex:1;height:1px;background:var(--line)}
+.slot-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(208px,1fr));
+  gap:8px}
+.slot-item{display:flex;align-items:center;gap:4px;background:var(--card-2);
+  border:1px solid var(--line);border-radius:12px;padding:5px 7px 5px 6px;
+  transition:border-color .15s,background-color .15s}
+.slot-item:hover{border-color:var(--line2);background-color:var(--card)}
+/* 编号是个输入框：填数字=第 N 节，填文字（中午1/早读）=具名节次 */
+.slot-item input.n{flex:none;width:58px;height:24px;line-height:24px;min-height:0;
+  text-align:center;border-radius:7px;background-color:var(--brand-l);
+  color:var(--brand-d);font-size:12px;font-weight:700;border:1px solid transparent;
+  padding:0 4px;cursor:text}
+.slot-item input.n:hover{border-color:var(--line2);background-color:var(--card)}
+.slot-item input.n:focus{border-color:var(--brand);background-color:var(--card);
+  outline:none;box-shadow:0 0 0 3px var(--brand-l)}
+/* 去掉 time 输入框自带的时钟图标：一行能排下 4 节，也不会和「–」挤在一起 */
+.slot-item input[type=time]{
+  flex:1 1 0;min-width:0;width:auto;min-height:0;
+  border:1px solid transparent;background-color:transparent;padding:4px 2px;
+  font-size:14px;text-align:center;font-variant-numeric:tabular-nums;
+  border-radius:8px;-webkit-appearance:none;appearance:none;cursor:text}
+.slot-item input[type=time]::-webkit-calendar-picker-indicator{display:none;width:0;opacity:0}
+.slot-item input[type=time]::-webkit-inner-spin-button,
+.slot-item input[type=time]::-webkit-clear-button{display:none}
+.slot-item input[type=time]:hover{border-color:var(--line2);background-color:var(--card)}
+.slot-item input[type=time]:focus{border-color:var(--brand);background-color:var(--card);
+  box-shadow:0 0 0 3px var(--brand-l)}
+.slot-item .dash{flex:none;color:var(--ink3);font-size:12px}
+.slot-item .x{flex:none;width:22px;height:22px;min-height:0;padding:0;border:none;
+  background-color:transparent;box-shadow:none;color:var(--ink3);font-size:16px;
+  line-height:1;border-radius:7px;opacity:.4;transition:opacity .15s,background-color .15s}
+.slot-item:hover .x{opacity:1}
+.slot-item .x:hover{background-color:var(--err-l);color:var(--err)}
+.slot-item .x:focus-visible{opacity:1}
+
+.slots-tools{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));
+  gap:14px;margin-top:18px;padding-top:16px;border-top:1px dashed var(--line2)}
+.tool{display:flex;flex-direction:column;gap:6px}
+.tool>span.k{font-size:12.5px;color:var(--ink3)}
+.tool .ctl{display:flex;align-items:center;gap:7px;font-size:13.5px;
+  color:var(--ink2);flex-wrap:wrap}
+.tool input[type=number]{width:70px;flex:none;text-align:center;padding:8px 4px;
+  font-size:15px;min-height:40px}
+.tool select{padding:9px 11px;font-size:14px;min-height:42px}
+.tool .wl{font-size:12.5px;color:var(--ink3)}
+
+.slot-preview{margin-top:18px;background:var(--sunken);border:1px solid var(--line);
+  border-radius:var(--r2);padding:13px 15px}
+.slot-preview .ph{font-size:12.5px;font-weight:650;color:var(--ink2);margin-bottom:8px}
+.sp-row{display:flex;align-items:baseline;gap:8px;font-size:13px;padding:4px 0;
+  flex-wrap:wrap}
+.sp-row .k{font-family:ui-monospace,Menlo,monospace;font-size:11.5px;
+  background-color:var(--card);border:1px solid var(--line);padding:1.5px 8px;
+  border-radius:6px;color:var(--brand-d);white-space:nowrap}
+.sp-row .arrow{color:var(--ink3)}
+.sp-row .v{color:var(--ink2)}
+.sp-row .t{font-variant-numeric:tabular-nums;color:var(--ink);font-weight:550}
+.sp-row .sep{color:var(--ink3)}
+
+/* ═══════════════════════════════════════════════════════════
+   模板帮助
+   ═══════════════════════════════════════════════════════════ */
+details.tpl{border:1px solid var(--line);border-radius:var(--r2);
+  margin-top:16px;background-color:var(--card-2);overflow:hidden}
+details.tpl>summary{padding:13px 15px;cursor:pointer;font-size:13.5px;
+  color:var(--ink2);font-weight:550;list-style:none;user-select:none;
+  transition:color .15s,background-color .15s}
+details.tpl>summary::-webkit-details-marker{display:none}
+details.tpl>summary::before{content:'▸';display:inline-block;margin-right:8px;
+  color:var(--ink3);transition:transform .18s}
+details.tpl[open]>summary::before{transform:rotate(90deg)}
+details.tpl>summary:hover{color:var(--brand-d);background-color:var(--sunken)}
+details.tpl[open]>summary{border-bottom:1px solid var(--line)}
+.tpl-body{padding:16px 15px}
+details.bell textarea{width:100%;font-size:13px;
+  font-family:ui-monospace,Menlo,Consolas,monospace}
+details.bell #bellMsg{margin-top:10px}
+details.bell #bellMsg:empty{display:none}
+
+.tpl-tabs{display:flex;gap:4px;margin-bottom:16px;background:var(--sunken);
+  padding:4px;border-radius:14px;overflow-x:auto;scrollbar-width:none}
+.tpl-tabs::-webkit-scrollbar{display:none}
+.tpl-tabs button{flex:1 0 auto;border:0;background:transparent;padding:9px 10px;
+  font-size:13px;color:var(--ink2);border-radius:11px;font-weight:550;
+  min-height:40px;box-shadow:none;white-space:nowrap}
+.tpl-tabs button.on{background-color:var(--card);color:var(--brand-d);
+  font-weight:650;box-shadow:var(--sh-1)}
+.tpl-lead{font-size:13.5px;color:var(--ink2);margin:0 0 12px;line-height:1.75}
+
+.tbl-demo{overflow-x:auto;-webkit-overflow-scrolling:touch;
+  border:1px solid var(--line);border-radius:var(--r2);background-color:var(--card)}
+/* ── 空状态下的示例 ──────────────────────────────────────────
+   这段示例以前是塞在 textarea 的 placeholder 里的制表符文本。
+   但文本框里中英混排根本对不齐：中文 1.0em、等宽拉丁 0.6em，
+   比值 1.667 不是整数，制表位落点随中文个数漂移（实测最大差 101px，
+   换等宽字体也还有 73px）。所以改成这里用真表格渲染，天然对齐。 */
+.paste-sample{margin-top:12px}
+.paste-sample[hidden]{display:none}
+.ps-cap{font-size:12.5px;color:var(--ink3);margin-bottom:8px;line-height:1.6}
+.ps-cap b{color:var(--ink2);font-weight:650}
+.ps-cap span{color:var(--ink3)}
+.ps-cap .ps-slim{display:none}
+/* 窄屏放不下 6 列，隐去两列可选的（教师 / 教室）——留下必填的 4 列，
+   否则表格会被右边切掉，看起来像坏了 */
+@media(max-width:520px){
+  .paste-sample .tbl-demo table{min-width:0}
+  .paste-sample .tbl-demo th:nth-child(2),.paste-sample .tbl-demo td:nth-child(2),
+  .paste-sample .tbl-demo th:nth-child(6),.paste-sample .tbl-demo td:nth-child(6){
+    display:none}
+  .ps-cap .ps-slim{display:inline}
+}
+.card-demo{padding:14px 17px;background-color:var(--card-2)}
+.card-sample{font-size:13px;line-height:2;color:var(--ink2);
+  font-family:ui-monospace,SFMono-Regular,Menlo,monospace;white-space:nowrap;
+  overflow-x:auto;-webkit-overflow-scrolling:touch}
+.card-sample .lb{color:var(--ink3)}
+.card-sample .hl{display:inline-block;background-color:var(--brand-l);
+  color:var(--brand-d);font-weight:650;border-radius:6px;padding:0 7px}
+.tbl-demo table{font-size:12.5px;min-width:100%}
+.tbl-demo thead th{background-color:var(--sunken);color:var(--ink2);
+  font-size:12px;font-weight:650;padding:9px 12px;
+  border-bottom:1px solid var(--line);white-space:nowrap;position:static}
+.tbl-demo td{padding:9px 12px;border-bottom:1px solid var(--line);
+  white-space:nowrap;color:var(--ink2)}
+.tbl-demo tbody tr:last-child td{border-bottom:none}
+.tbl-demo th.req::after{content:'*';color:var(--err);margin-left:2px}
+.tbl-demo tbody tr:nth-child(even) td{background-color:var(--card-2)}
+.tbl-demo tbody th{text-align:left;background-color:var(--sunken);
+  font-weight:550;color:var(--ink2);font-size:12px;padding:9px 12px;
+  border-bottom:1px solid var(--line);white-space:nowrap}
+.matrix-demo{table-layout:fixed}
+.matrix-demo thead th{text-align:left}
+.matrix-demo thead th:first-child,.matrix-demo tbody th{width:74px}
+.matrix-demo td,.matrix-demo tbody th{border-right:1px solid var(--line)}
+.matrix-demo tr>*:last-child{border-right:none}
+.matrix-demo td{white-space:normal;vertical-align:top;padding:8px 9px}
+/* text-wrap:pretty 避免「…中午2-6」/「节」这种把单个字甩到下一行的断法 */
+.matrix-demo .cell{font-size:11.5px;line-height:1.6;text-wrap:pretty}
+.matrix-demo .cell b{display:block;color:var(--ink);font-weight:650;
+  margin-bottom:2px;text-wrap:pretty}
+.matrix-demo .cell span{display:block;color:var(--ink3);text-wrap:pretty}
+.tpl-note{font-size:12.5px;color:var(--ink3);margin:10px 0 14px;line-height:1.7}
+.tpl-note b{color:var(--err);font-weight:650}
+
+.field-list{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));
+  gap:9px;margin-top:10px}
+.field{background-color:var(--card);border:1px solid var(--line);
+  border-radius:var(--r2);padding:11px 13px}
+.field .fk{font-size:13.5px;font-weight:650;display:flex;align-items:center;
+  gap:6px;margin-bottom:5px}
+.field .fk .req{font-size:10.5px;font-weight:650;background-color:var(--err-l);
+  color:var(--err);padding:1px 6px;border-radius:5px}
+.field .fv{font-size:12.5px;color:var(--ink3);line-height:1.8}
+.field .fv code{font-size:11.5px}
+
+.chips{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}
+.chip{display:inline-flex;align-items:center;gap:6px;background-color:var(--card);
+  border:1px solid var(--line);border-radius:999px;padding:5px 13px;
+  font-size:12.5px;color:var(--ink3)}
+.chip code{font-size:11.5px;color:var(--brand-d)}
+
+h4.tplh{font-size:13.5px;font-weight:650;color:var(--ink);margin:22px 0 0;
+  padding-top:18px;border-top:1px dashed var(--line2)}
+
+footer{text-align:center;color:var(--ink3);font-size:12.5px;
+  padding:26px 16px calc(34px + var(--sab));line-height:1.9}
+
+/* ═══════════════════════════════════════════════════════════
+   手机 / iOS
+   ═══════════════════════════════════════════════════════════ */
+@media(max-width:760px){
+  .hero{padding:calc(var(--sat) + 30px) 20px 46px;border-radius:0 0 26px 26px}
+  .hero .mark{width:48px;height:48px;border-radius:15px;margin-bottom:13px}
+  .hero h1{font-size:23px}
+  .hero .sub{font-size:13.5px}
+  .hero .privacy{font-size:12px;padding:5px 12px;margin-top:13px}
+
+  /* 步骤条吸顶，滚动时随时能切步骤 */
+  .steps{
+    position:sticky;top:calc(var(--sat) + 8px);
+    margin-top:-24px;border-radius:16px;
+    background-color:var(--glass);
+    -webkit-backdrop-filter:blur(16px) saturate(1.6);
+    backdrop-filter:blur(16px) saturate(1.6);
+  }
+  .lbl{display:none}
+  .lbl-s{display:inline}
+  .step{font-size:13px;gap:6px;padding:8px 5px}
+
+  main{padding:14px 12px calc(20px + var(--sab))}
+  .card{padding:16px;border-radius:18px;margin-bottom:12px}
+  .grid2{gap:12px}
+  .sec-head select{flex:1 1 100%;min-width:0}
+
+  /* iOS Safari 在聚焦小于 16px 的输入框时会把整页放大，并在失焦后留下放大状态。
+     手机上把每一种输入框都抬到 16px 以上，从根上避免这个抖动。 */
+  input,select,textarea{font-size:16px}
+  details.bell textarea,.tool input[type=number],.tool select,
+  .sec-head select{font-size:16px}
+  .slot-item input.n{font-size:16px;font-weight:650;width:84px;height:32px;
+    line-height:32px;min-height:0}
+
+  /* 底部操作条：拇指可及，滚动时始终可见 */
+  .actions{
+    position:sticky;bottom:0;z-index:30;
+    margin:14px -12px 0;padding:10px 12px calc(10px + var(--sab));
+    gap:10px;border-top:1px solid var(--line);
+    background-color:var(--glass);
+    -webkit-backdrop-filter:blur(18px) saturate(1.7);
+    backdrop-filter:blur(18px) saturate(1.7);
+  }
+  .actions button{flex:1 1 0;min-height:48px;font-size:15px;padding:12px 10px}
+  .actions .right{margin-left:0}
+  .actions>span:empty{display:none}
+
+  /* 表格 → 卡片 */
+  .table-wrap.cards{overflow:visible;margin:0;padding:0}
+  .table-wrap.cards table,.table-wrap.cards tbody,
+  .table-wrap.cards tr,.table-wrap.cards td{display:block;width:100%}
+  .table-wrap.cards thead{display:none}
+  .table-wrap.cards td.t-c-uid{display:none}
+  .table-wrap.cards tr{
+    position:relative;background-color:var(--card-2);
+    border:1px solid var(--line);border-radius:16px;
+    padding:13px 14px;margin-bottom:10px;
+  }
+  .table-wrap.cards tr:hover{background-color:var(--card-2)}
+  .table-wrap.cards tr.empty-row{background:none;border:0;padding:0;margin:0}
+  .table-wrap.cards tr.empty-row:hover{background:none}
+  .table-wrap.cards td{border:0;padding:0;display:flex;align-items:center;gap:10px;
+    min-height:0}
+  .table-wrap.cards td+td{margin-top:1px}
+  .table-wrap.cards td::before{
+    content:attr(data-label);flex:none;width:62px;
+    font-size:12.5px;color:var(--ink3);font-weight:500}
+  .table-wrap.cards td:not([data-label])::before{content:none}
+  .table-wrap.cards td.empty{justify-content:center;text-align:center;min-height:56px}
+  /* 「重复」格里有 <br>，必须走 block 流，不能让 flex 把 <br> 变成兄弟项 */
+  .table-wrap.cards td.c-ev-rr{display:block;padding-left:62px;position:relative;
+    font-size:13px}
+  .table-wrap.cards td.c-ev-rr::before{position:absolute;left:0;top:0}
+  .table-wrap.cards td>input,.table-wrap.cards td>select{
+    flex:1 1 auto;min-width:0;font-size:16px;padding:8px 10px}
+  /* 卡片里的下拉框很宽，箭头照旧留足右侧空间 */
+  .table-wrap.cards td>select{padding-right:28px;background-position:right 9px center}
+  /* 序号贴到卡片右上角 */
+  .table-wrap.cards td.t-num{
+    position:absolute;top:15px;right:15px;width:auto;margin:0;
+    font-size:11.5px;font-weight:650;color:var(--ink3)}
+  /* 标题行：放大、去掉标签 */
+  .table-wrap.cards td.c-title{padding-right:32px;margin-bottom:3px}
+  .table-wrap.cards td.c-title::before,.table-wrap.cards td.c-del::before{display:none}
+  .table-wrap.cards td.c-title input{padding-left:0;padding-right:0;
+    font-size:16.5px;font-weight:650}
+  .table-wrap.cards td.c-ev-title{padding-right:32px;font-size:15.5px;
+    font-weight:650;margin-bottom:4px;display:block}
+  .table-wrap.cards td.c-ev-title::before{display:none}
+  .table-wrap.cards td.c-del{margin-top:11px}
+  .table-wrap.cards td.c-del button{
+    width:100%;background-color:var(--err-l);border-color:transparent;
+    color:var(--err);font-size:13.5px;min-height:40px}
+  .table-wrap.cards td.c-del button:hover{background-color:var(--err-l)}
+
+  /* 放假 / 补课行：日期独占一行，其余并排 */
+  .rule-row,.rule-row.wide{grid-template-columns:1fr auto;gap:8px;
+    background-color:var(--card-2);border:1px solid var(--line);
+    border-radius:14px;padding:12px;align-items:center;margin-bottom:10px}
+  .rule-row>input[type=date],.rule-row.wide>input[type=date],
+  .rule-row.wide>select{grid-column:1/-1}
+  .rule-row>button,.rule-row.wide>button{
+    grid-column:2/3;background-color:var(--err-l);border-color:transparent;
+    color:var(--err);min-height:46px}
+  .rule-row.wide>input[data-k=slots]{grid-column:1/2}
+
+  /* 作息表：单列，触控目标抬高 */
+  .slot-grid{grid-template-columns:1fr;gap:8px}
+  .slot-item{padding:6px 8px 6px 7px;min-height:52px;border-radius:13px}
+  .slot-item input.n{width:66px;height:28px;line-height:28px;font-size:12.5px;
+    border-radius:8px}
+  .slot-item input[type=time]{font-size:16px}
+  .slot-item .x{opacity:1;width:28px;height:28px;font-size:18px}
+  .slots-tools{grid-template-columns:1fr;gap:16px}
+  .slots-tools .ctl{width:100%}
+  .slots-tools .ctl button{flex:1 1 auto}
+  .tool input[type=number]{width:78px;min-height:46px}
+
+  .stats{grid-template-columns:repeat(2,1fr);gap:9px}
+  .stat{padding:11px 12px;border-radius:13px}
+  .stat .v{font-size:20px}
+  .field-list{grid-template-columns:1fr}
+  .tbl-demo table{min-width:460px}
+  /* 矩阵示例硬压成 6 等分会把「课程:大学英语」拆得没法读，
+     宁可让它横向滚动一点 */
+  .matrix-demo table{min-width:400px}
+  .matrix-demo thead th:first-child,.matrix-demo tbody th{width:60px}
+  .tpl-tabs button{font-size:12.5px;padding:8px 12px}
+  button.small{min-height:42px;font-size:13.5px}
+  .drop{padding:28px 14px}
+}
+
+@media(max-width:400px){
+  .hero h1{font-size:21px}
+  .hero{padding-left:16px;padding-right:16px}
+  .step{font-size:12px;padding:8px 3px;gap:5px}
+  .step .num{width:20px;height:20px;font-size:11px}
+  .card{padding:14px;border-radius:16px}
+  main{padding:12px 10px calc(18px + var(--sab))}
+  .actions{margin-left:-10px;margin-right:-10px;padding-left:10px;padding-right:10px}
+  .grid2{grid-template-columns:1fr}
+  .tbl-demo table{min-width:420px}
+  .matrix-demo table{min-width:0}
+}
+</style>
+</head>
+<body>
+
+<header class="hero">
+  <div class="mark" aria-hidden="true">
+    <svg viewBox="0 0 24 24" width="27" height="27" fill="none" stroke="currentColor"
+         stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+      <rect x="3" y="5" width="18" height="16" rx="3.5"/>
+      <path d="M8 2.8v4.2M16 2.8v4.2M3 10.2h18"/>
+      <path d="M7.6 14.2h3M13.4 14.2h3M7.6 17.6h3"/>
+    </svg>
+  </div>
+  <h1>课表导入器</h1>
+  <p class="sub">把课表转成日历文件 → 导入 iPhone / iPad / Mac → iCloud 自动同步</p>
+  <p class="privacy">🔒 全部在你的设备上完成，不上传、不联网</p>
+</header>
+
+<nav class="steps" id="steps">
+  <button class="step on" data-step="1"><span class="num">1</span><span class="lbl">学期与课表</span><span class="lbl-s">学期</span></button>
+  <button class="step" data-step="2"><span class="num">2</span><span class="lbl">核对课程</span><span class="lbl-s">核对</span></button>
+  <button class="step" data-step="3"><span class="num">3</span><span class="lbl">放假与调课</span><span class="lbl-s">放假</span></button>
+  <button class="step" data-step="4"><span class="num">4</span><span class="lbl">导出日历</span><span class="lbl-s">导出</span></button>
+</nav>
+
+<main>
+
+<!-- ═══════════ 1 ═══════════ -->
+<section class="panel" id="panel1">
+  <div class="card">
+    <h2>学期</h2>
+    <p class="hint" style="margin:0 0 12px">决定「第几周」对应哪一天。默认已按最近开学季填好，一般不用改。</p>
+    <div class="grid2">
+      <label class="f">学期名称<input id="semName" autocomplete="off"></label>
+      <label class="f">第 1 周周一<input type="date" id="semStart"></label>
+      <label class="f">总周数<input type="number" id="semWeeks" min="1" max="53" step="1"></label>
+      <label class="f">时区<select id="semTZ">
+        <option value="480" selected>中国标准时间（UTC+8）</option>
+        <option value="540">日本 / 韩国（UTC+9）</option>
+        <option value="360">乌鲁木齐（UTC+6）</option>
+        <option value="420">曼谷 / 雅加达（UTC+7）</option>
+        <option value="0">英国（UTC+0）</option>
+        <option value="60">中欧（UTC+1）</option>
+        <option value="-300">美国东部（UTC−5）</option>
+        <option value="-480">美国太平洋（UTC−8）</option>
+        <option value="600">悉尼（UTC+10）</option>
+      </select></label>
+      <label class="f">单双周基准<select id="oddBasis">
+        <option value="1" selected>本学期的第 1 周 = 单周</option>
+        <option value="2">本学期的第 1 周 = 双周</option>
+      </select></label>
+    </div>
+    <div id="semInfo" class="hint"></div>
+    <p class="hint">「单周 / 双周」的奇偶是以<b>本学期的第 1 周</b>为基准的
+      （第 1 周 = 单周，第 3 周 = 单周…），绝大多数学校都是这样。
+      如果你们学校按<b>自然年周数</b>或<b>学年连续编号</b>，导致单双周整好差一格
+      （导入后发现在日历上单双反了），把上面那项切成「第 1 周 = 双周」即可。</p>
+  </div>
+
+  <div class="card">
+    <div class="sec-head">
+      <h2>上下课时间 <span class="badge" id="slotCount">12 节</span></h2>
+      <select id="slotPreset" title="选择一套和你学校接近的作息"></select>
+    </div>
+    <p class="hint" style="margin:6px 0 0">每个学校的作息都不一样。这里决定课表里写的
+      <b>「第 3 节」到底对应几点到几点</b>——它直接决定导出到日历的时间。改完会自动记住。</p>
+
+    <div id="slotEditor"></div>
+
+    <div class="slots-tools">
+      <label class="tool"><span class="k">每节时长</span>
+        <span class="ctl"><input type="number" id="slotDur" value="45" min="5" max="240" step="5"> 分钟</span></label>
+      <label class="tool"><span class="k">小节之间的课间</span>
+        <span class="ctl"><input type="number" id="slotGap" value="5" min="0" max="120" step="5"> 分钟</span></label>
+      <div class="tool"><span class="k">按上面两项重算</span>
+        <span class="ctl"><button class="ghost small" id="btnRegenSlots">重排整张表</button></span></div>
+      <div class="tool"><span class="k">增删</span>
+        <span class="ctl"><button class="ghost small" id="btnAddSlot">+ 添加一节</button>
+        <button class="ghost small" id="btnAddNamedSlot"
+          title="有些学校在午休里排课（中午1、早读、晚自习），这些节次不在 1…N 的主序列里">
+          + 中午/早读</button>
+        <button class="link danger small" id="btnResetSlots">恢复默认</button></span></div>
+    </div>
+
+    <div class="slots-tools" style="border-top:none;padding-top:12px">
+      <label class="tool"><span class="k">连堂（连续多节）怎么合并</span>
+        <select id="joinMode">
+          <option value="gap">按课间自动切分（推荐）</option>
+          <option value="keep">连排节次合并为一个事件</option>
+          <option value="split">每节各自一个事件</option>
+        </select></label>
+      <label class="tool"><span class="k">课间多短算「连着上」</span>
+        <span class="ctl"><input type="number" id="maxBreak" value="5" min="0" max="60" step="1">
+        分钟以内（仅上面第一种模式生效）</span></label>
+    </div>
+
+    <details class="tpl bell">
+      <summary>课表底部有张作息表？粘过来自动填好这一整栏</summary>
+      <div class="tpl-body">
+        <p class="tpl-lead">从 Excel 里连行一起复制（列 = 上午 / 下午 / 晚上）粘到下面。
+          能认 <code>第3节课 10:15–11:05</code>，也能认
+          <code>中午第1节课 12:05–12:55</code> —— 后者会自动变成具名节次。</p>
+        <textarea id="bellText" rows="4" spellcheck="false"
+          placeholder="上午:	下午:	晚上:&#10;第1节课 8:00–8:50	第5节课 14:30–15:20	第9节课 19:00–19:50&#10;中午第1节课 12:05–12:55	中午第2节课 13:35–14:25"></textarea>
+        <div class="row" style="margin-top:9px">
+          <button class="ghost small" id="btnParseBell">识别并填入上面的节次表</button>
+        </div>
+        <div id="bellMsg"></div>
+      </div>
+    </details>
+
+    <div class="slot-preview" id="slotPreview"></div>
+  </div>
+
+  <div class="card">
+    <h2>课表来源</h2>
+    <p class="hint" style="margin:0 0 12px">三种形态都能直接贴进来，会自动认：
+      <b>每行一门课</b>的表格、
+      <b>行=节次、列=星期</b>的课程表矩阵、
+      以及教务里点开一门课复制出来的 <b>「课程信息」卡片</b>。</p>
+    <div class="tabs" id="tabs">
+      <button data-tab="paste" class="on">粘贴文本</button>
+      <button data-tab="file">选择文件</button>
+    </div>
+    <div id="tab-paste">
+      <textarea id="pasteText" rows="8" spellcheck="false"
+        placeholder="把课表粘贴到这里 —— 从教务系统框选表格复制，或从 Excel 里连行复制。&#10;分隔符用制表符 / 逗号 / 竖线都能识别；列的顺序无所谓，只要包含「课程名称 / 星期 / 节次 / 周次」就行。"></textarea>
+      <div class="row" style="margin-top:10px">
+        <button class="ghost small" id="btnSample">载入示例课表</button>
+        <button class="ghost small" id="btnSampleCard">载入示例「课程信息」</button>
+        <button class="link" id="btnClear">清空</button>
+      </div>
+      <div id="pasteSample" class="paste-sample">
+        <div class="ps-cap">
+          <b>示例</b> · 每行一门课，第一行是表头
+          <span>（点上面的「载入示例课表」可以把一份完整样例填进框里）</span>
+          <span class="ps-slim">（窄屏只显示必填列）</span>
+        </div>
+        <div class="tbl-demo">
+          <table>
+            <thead><tr>
+              <th class="req">课程名称</th><th>教师</th><th class="req">周次</th>
+              <th class="req">星期</th><th class="req">节次</th><th>教室</th>
+            </tr></thead>
+            <tbody>
+              <tr><td>高等数学</td><td>张老师</td><td>1-16周</td><td>周一</td><td>1-2</td><td>教一301</td></tr>
+              <tr><td>线性代数</td><td>李老师</td><td>1-16周(单)</td><td>周二</td><td>3-4</td><td>教二205</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+    <div id="tab-file" hidden>
+      <div class="drop" id="dropZone">
+        <div style="font-size:26px;margin-bottom:6px">📄</div>
+        <div>把文件拖到这里，或点击选择</div>
+        <div style="font-size:12.5px;margin-top:6px">.xlsx / .csv / .tsv / .txt</div>
+      </div>
+      <input type="file" id="fileInput" accept=".xlsx,.csv,.tsv,.txt" hidden>
+      <p class="hint">旧版 <code>.xls</code> 格式请先在 Excel / WPS 里「另存为」<code>.xlsx</code> 或 <code>.csv</code> 再导入。</p>
+    </div>
+
+    <details class="tpl" id="tplHelp">
+      <summary>不知道怎么填？看格式说明 / 下载模板</summary>
+      <div class="tpl-body">
+
+        <div class="tpl-tabs" id="tplTabs">
+          <button data-tpltab="long" class="on">格式一 · 每行一门课</button>
+          <button data-tpltab="matrix">格式二 · 课程表矩阵</button>
+          <button data-tpltab="card">格式三 · 课程信息</button>
+        </div>
+
+        <!-- 格式一 -->
+        <div id="tplpanel-long">
+          <p class="tpl-lead">第一行是表头，之后每行一门课。
+            <b>教务系统导出的 Excel、以及网上选课系统里能选中的表格，基本都是这个形态。</b></p>
+          <div class="tbl-demo">
+            <table>
+              <thead><tr>
+                <th class="req">课程名称</th><th>教师</th><th class="req">周次</th>
+                <th class="req">星期</th><th class="req">节次</th><th>教室</th>
+              </tr></thead>
+              <tbody>
+                <tr><td>高等数学</td><td>张老师</td><td>1-16周</td><td>周一</td><td>1-2</td><td>教一301</td></tr>
+                <tr><td>线性代数</td><td>李老师</td><td>1-16周(单)</td><td>周二</td><td>3-4</td><td>教二205</td></tr>
+                <tr><td>大学英语</td><td>王老师</td><td>1-16周(双)</td><td>周二</td><td>3-4</td><td>教二206</td></tr>
+                <tr><td>数据结构</td><td>陈老师</td><td>3-15周</td><td>周三</td><td>2-3</td><td>教三101</td></tr>
+                <tr><td>体育</td><td>赵老师</td><td>1-16周</td><td>周五</td><td>7-8</td><td>操场</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <p class="tpl-note">带 <b>*</b> 的列是必填，其余可以留空。示例行刻意只用数字节次，
+            不改任何设置也能直接解析；你学校如果在午休里排课，那一栏写 <code>中午2-6</code>，
+            并先在上面的「上下课时间」里把 中午1、中午2 加上。</p>
+          <div class="row">
+            <button class="primary small" data-tpl="xlsx">⬇︎ 下载 Excel 模板</button>
+            <button class="ghost small" data-tpl="csv">CSV</button>
+            <button class="ghost small" data-tpl="tsv">TSV</button>
+            <button class="ghost small" data-tpl="fill">直接填入粘贴框</button>
+          </div>
+        </div>
+
+        <!-- 格式二 -->
+        <div id="tplpanel-matrix" hidden>
+          <p class="tpl-lead"><b>行是节次、列是星期，一格 = 一次课。</b>
+            教务系统里的「课程表」页面、以及打印出来的课表，多是这个形态。
+            下面这份照研究生教务的导出样子画：行首有分组列，格子里带字段名，
+            一门课跨几节就是一个合并单元格。</p>
+          <div class="tbl-demo">
+            <table class="matrix-demo">
+              <thead><tr>
+                <th>分组</th><th>节次</th><th>星期一</th><th>星期二</th><th>星期三</th><th>星期四</th>
+              </tr></thead>
+              <tbody>
+                <tr>
+                  <th rowspan="2">上午</th><th>3</th>
+                  <td></td>
+                  <td rowspan="2"><div class="cell"><b>课程:大学英语</b><span>班级:英语1班</span><span>(教二205)</span><span>3-18周 星期二 3-4节</span><span>主讲教师:李老师</span></div></td>
+                  <td></td><td></td>
+                </tr>
+                <tr><th>4</th><td></td><td></td><td></td></tr>
+                <tr>
+                  <th rowspan="2">中午</th><th>中午1</th>
+                  <td></td><td></td><td></td><td></td>
+                </tr>
+                <tr>
+                  <th>中午2</th>
+                  <td></td><td></td><td></td>
+                  <td rowspan="3"><div class="cell"><b>课程:高等数学</b><span>班级:数学1班</span><span>(教一301)</span><span>13-13周 星期四 中午2-6节</span><span>主讲教师:张老师</span></div></td>
+                </tr>
+                <tr>
+                  <th rowspan="2">下午</th><th>5</th>
+                  <td></td><td></td><td></td>
+                </tr>
+                <tr><th>6</th><td></td><td></td><td></td></tr>
+                <tr>
+                  <th>晚上</th><th>11</th>
+                  <td></td><td></td><td></td>
+                  <td><div class="cell"><b>课程:大学物理实验</b><span>班级:物理1班</span><span>(实验楼B203)</span><span>3-18周 星期四 11节</span><span>主讲教师:刘老师</span></div></td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p class="tpl-note">格子里带「课程: / 班级: / 主讲教师:」字段名最准；只写
+            课程名 / 教师 / 周次 / 教室四行也认。<b>节次以格子里写的那一句为准</b>
+            （比如 <code>中午2-6节</code>），行首只用来定位。<b>中午1、中午2</b>
+            这种具名节次要先在上面的「上下课时间」里有才行。
+            格子里有换行，CSV 存不下，所以这种格式只能用 Excel 模板。</p>
+          <div class="row">
+            <button class="primary small" data-tpl="xlsx">⬇︎ 下载 Excel 模板（含此格式）</button>
+          </div>
+        </div>
+
+        <!-- 格式三 -->
+        <div id="tplpanel-card" hidden>
+          <p class="tpl-lead">在教务系统里<b>点开一门课、把「课程信息」那一块整段复制</b>出来，
+            就是这个样子：一行一个字段，字段名后面跟冒号。它没有表格结构，
+            但字段名最全，所以是<b>最不容易认错的一种贴法</b>。</p>
+          <div class="tbl-demo card-demo">
+            <div class="card-sample">
+              <div><span class="lb">课程:</span>高等数学（A班）</div>
+              <div><span class="lb">班级:</span>高等数学（A班）3</div>
+              <div>(教一301)</div>
+              <div class="hl">5,9,13周 星期四 中午2-6节</div>
+              <div><span class="lb">主讲教师:</span>张老师</div>
+            </div>
+          </div>
+          <p class="tpl-note">上面这几行可以原样复制进粘贴框试一次。
+            <b>多门课就直接把几张卡片连着贴</b>，卡片之间不用留空行也行。</p>
+
+          <h4 class="tplh">卡片里哪几行是必须的</h4>
+          <div class="field-list">
+            <div class="field">
+              <div class="fk">课程: <span class="req">必填</span></div>
+              <div class="fv">课程名。这一行也是<b>一张卡片的起点</b>，多张卡片靠它切开。</div>
+            </div>
+            <div class="field">
+              <div class="fk">周次 + 星期 + 节次 <span class="req">必填</span></div>
+              <div class="fv">几乎都写在同一行：<code>5,9,13周 星期四 中午2-6节</code>。
+                <br>周次可以罗列（<code>5,9,13周</code>）、可以是区间（<code>3-18周</code>），
+                也可以两者混写（<code>2-6,13周</code>）。</div>
+            </div>
+            <div class="field">
+              <div class="fk">(教一301)</div>
+              <div class="fv">单独一行、整行就是一个括号 = 上课地点。不在括号里的地点也认。</div>
+            </div>
+            <div class="field">
+              <div class="fk">主讲教师:</div>
+              <div class="fv">教师。可留空。<code>班级:</code> 那一行会被忽略掉。</div>
+            </div>
+          </div>
+
+          <div class="nt warn" style="margin:14px 0 0">
+            <span class="ic">⚠️</span>
+            <span>节次里出现 <b>「中午」「早读」</b>这类词时，要先到上面的
+              <b>「上下课时间」</b>里把对应节次加上（选「11 节 + 中午 2 节」那套预设最快）。
+              加之前这一节对不上时间，会被跳过并给出提示 —— 这是刻意的，
+              宁可少一门课，也不给你一门时间全错的课。</span>
+          </div>
+
+          <div class="row" style="margin-top:12px">
+            <button class="primary small" data-tpl="card">填入粘贴框试试</button>
+          </div>
+        </div>
+
+        <div class="nt info" style="margin:16px 0 0">
+          <span class="ic">💡</span>
+          <span><b>最省事的做法：</b>下载 Excel 模板 → 打开「长表型」这张表 →
+            把示例行改成你自己的课（用不上的行删掉）→ 保存 → 拖回上面的上传区。</span>
+        </div>
+
+        <h4 class="tplh">各列怎么写</h4>
+        <div class="field-list">
+          <div class="field">
+            <div class="fk">课程名称 <span class="req">必填</span></div>
+            <div class="fv">任意文字。会直接成为日历事件的标题。</div>
+          </div>
+          <div class="field">
+            <div class="fk">星期 <span class="req">必填</span></div>
+            <div class="fv"><code>周一</code> <code>星期一</code> <code>礼拜一</code> <code>1</code>
+              <br>周日的写法：<code>周日</code> <code>周天</code> <code>7</code></div>
+          </div>
+          <div class="field">
+            <div class="fk">节次 <span class="req">必填</span></div>
+            <div class="fv"><code>1-2</code> <code>1,2</code> <code>第1-2节</code> <code>1-2节</code>
+              <br>连上三节写 <code>1-3</code>，跳着上写 <code>1,3</code></div>
+          </div>
+          <div class="field">
+            <div class="fk">具名节次</div>
+            <div class="fv"><code>中午1</code> <code>中午2-6</code> <code>中午第1节课</code> <code>早读</code>
+              <br>午休、早读这类不在 1…N 编号里的节次，先在上面的「上下课时间」里
+              加一行、把名字写成中文，这里就能直接引用。</div>
+          </div>
+          <div class="field">
+            <div class="fk">周次 <span class="req">必填</span></div>
+            <div class="fv"><code>1-16周</code> 连续 · <code>1-16周(单)</code> 单周 · <code>1-16周(双)</code> 双周
+              <br><code>1-8,10-16周</code> 多段（第 9 周没课）</div>
+          </div>
+          <div class="field">
+            <div class="fk">教师 / 教室</div>
+            <div class="fv">任意文字，可以留空。教室会写进日历事件的「位置」，方便点开导航。</div>
+          </div>
+          <div class="field">
+            <div class="fk">表头</div>
+            <div class="fv">列的顺序无所谓，会按表头名自动对应。没有表头时按上面的顺序猜。</div>
+          </div>
+        </div>
+
+        <h4 class="tplh">周次的写法</h4>
+        <div class="chips">
+          <span class="chip"><code>1-16周</code> 连续 16 周</span>
+          <span class="chip"><code>1-16周(单)</code> 只在单周</span>
+          <span class="chip"><code>1-16周(双)</code> 只在双周</span>
+          <span class="chip"><code>1-8,10-16周</code> 中间第 9 周停一次</span>
+          <span class="chip"><code>1-4,9-12周</code> 两段</span>
+          <span class="chip"><code>1-16周 单双周</code> 隔周上一次（第 1、3、5… 周）</span>
+          <span class="chip"><code>2-16周 单双周</code> 同上，但从第 2 周起</span>
+        </div>
+        <p class="tpl-note" style="margin-top:10px"><b>「单双周」和「隔周」是同一个意思：隔一周上一次，课时减半。</b>
+          它<b>不是</b>「每周都上」。如果这门课确实每周都上，写 <code>1-16周</code> 或 <code>每周</code>。</p>
+        <p class="tpl-note"><b>「单周」和「双周」是另外两回事：</b>
+          <code>1-16周(单)</code> 只上第 1、3、5… 周；<code>1-16周(双)</code> 只上第 2、4、6… 周。
+          两者都以<b>学期第 1 周</b>为基准。</p>
+
+        <h4 class="tplh">节次的写法</h4>
+        <div class="chips">
+          <span class="chip"><code>1-2</code> 连着上两节</span>
+          <span class="chip"><code>1,3</code> 第 1 和第 3 节（跳过第 2 节）</span>
+          <span class="chip"><code>第1-2节</code> 带「第」「节」也行</span>
+          <span class="chip"><code>中午1</code> 具名节次</span>
+          <span class="chip"><code>中午2-6</code> 中午2 + 第5 + 第6 节</span>
+          <span class="chip"><code>中午第1节课</code> 作息表里的长写法也认</span>
+        </div>
+        <p class="tpl-note" style="margin-top:10px">
+          <b>范围是按「上下课时间」里的位置连着的</b>，不是数字相减：
+          <code>中午2-6</code> 指的是作息表上从 中午2 一路数到第 6 节，
+          中间挨着的 中午2、5、6 三节。作息表里没有的写法会提示你去补，
+          不会偷偷当成第 1 节。另外两节之间会不会并成一条日历事件，
+          由上面「连堂怎么合并」那一栏决定。</p>
+
+        <p class="hint" style="margin-top:14px">也可以直接从教务系统网页上<b>选中表格复制</b>，粘到上面的文本框里 ——
+          分隔符是制表符、逗号还是竖线都能识别。</p>
+      </div>
+    </details>
+      </div>
+    </details>
+  </div>
+
+  <div id="step1Msg"></div>
+
+  <div class="actions">
+    <span></span>
+    <button class="primary right" id="btnParse">解析课表 →</button>
+  </div>
+</section>
+
+<!-- ═══════════ 2 ═══════════ -->
+<section class="panel" id="panel2" hidden>
+  <div class="card">
+    <div class="card-head">
+      <h2>核对课程 <span class="badge" id="courseCount">0 门</span></h2>
+      <button class="ghost small" id="btnAddRow">+ 手动添加一行</button>
+    </div>
+    <p class="hint" style="margin:0 0 10px">直接点击就能改。改完下面的统计会立刻更新。</p>
+    <div id="parseWarnings"></div>
+    <div class="table-wrap cards">
+      <table>
+        <thead><tr>
+          <th class="t-num">#</th><th style="min-width:130px">课程名</th><th style="min-width:78px">教师</th>
+          <th style="min-width:88px">地点</th><th style="min-width:104px">星期</th>
+          <th style="min-width:74px">节次</th><th style="min-width:118px">周次</th><th></th>
+        </tr></thead>
+        <tbody id="courseBody"></tbody>
+      </table>
+    </div>
+    <p class="hint">周次写法：<code>1-16周</code> · <code>1-16周(单)</code> · <code>1-16周(双)</code> ·
+      <code>1-8,10-16周</code> · <code>单双周</code>（= 隔周上一次）· <code>3-15周</code></p>
+  </div>
+
+  <div id="conflictBox"></div>
+
+  <div class="actions">
+    <button class="ghost" id="btnBack2">← 上一步</button>
+    <button class="primary right" id="btnToStep3">下一步 →</button>
+  </div>
+</section>
+
+<!-- ═══════════ 3 ═══════════ -->
+<section class="panel" id="panel3" hidden>
+  <div class="card">
+    <div class="card-head">
+      <h2>放假 / 停课</h2>
+      <button class="ghost small" id="btnAddHoliday">+ 添加日期</button>
+    </div>
+    <p class="hint" style="margin:0 0 10px">这些日期上的课会被自动排除。日历文件用
+      <code>EXDATE</code> 表达，所以不会把重复规则打断成很多条。</p>
+    <div id="holidayList"></div>
+    <div class="row" style="margin-top:10px">
+      <button class="ghost small" id="btnQuickNational">+ 国庆（10/1–10/7）</button>
+      <button class="ghost small" id="btnQuickNewYear">+ 元旦（1/1）</button>
+      <button class="ghost small" id="btnQuickLabor">+ 劳动节（5/1–5/3）</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-head">
+      <h2>补课</h2>
+      <button class="ghost small" id="btnAddMakeup">+ 添加补课</button>
+    </div>
+    <p class="hint" style="margin:0 0 10px">补课会作为独立事件加入，不受上面的停课规则影响。</p>
+    <div id="makeupList"></div>
+  </div>
+
+  <div class="actions">
+    <button class="ghost" id="btnBack3">← 上一步</button>
+    <button class="primary right" id="btnToStep4">下一步 →</button>
+  </div>
+</section>
+
+<!-- ═══════════ 4 ═══════════ -->
+<section class="panel" id="panel4" hidden>
+  <div class="card">
+    <h2>事件样式</h2>
+    <div class="grid2" style="margin-top:10px">
+      <label class="f">标题格式<input id="titleTpl" autocomplete="off"></label>
+      <label class="f">提前提醒<select id="reminder">
+        <option value="0">不提醒</option>
+        <option value="5">5 分钟</option>
+        <option value="10" selected>10 分钟</option>
+        <option value="15">15 分钟</option>
+        <option value="30">30 分钟</option>
+      </select></label>
+    </div>
+    <label class="chk"><input type="checkbox" id="useEmoji"> 标题前加类型图标（便于在日历里扫视）</label>
+    <p class="hint">可用变量：<code>{课程名}</code> <code>{教师}</code> <code>{地点}</code>
+      <code>{节次}</code> <code>{周次}</code> <code>{类型}</code></p>
+  </div>
+
+  <div class="card">
+    <div class="card-head">
+      <h2>将要写入日历的内容 <span class="badge" id="eventCount">0 个事件</span></h2>
+    </div>
+    <div id="planWarnings"></div>
+    <div class="stats" id="statsBox"></div>
+    <div class="table-wrap cards">
+      <table>
+        <thead><tr>
+          <th class="t-num">#</th><th class="h-uid">UID</th><th style="min-width:130px">标题</th>
+          <th style="min-width:160px">首次时间</th><th>重复</th><th>地点</th><th>覆盖</th>
+        </tr></thead>
+        <tbody id="eventBody"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>下载日历文件</h2>
+    <p class="hint" style="margin:0 0 14px">下载后按下面的步骤导入系统日历。文件里包含
+      <b id="fnCount">0</b> 个事件。</p>
+    <button class="primary big" id="btnDownload" disabled>⬇︎ 下载 .ics 日历文件</button>
+    <button class="ghost" id="btnCopyICS" style="width:100%">复制 .ics 文本</button>
+    <div id="dlMsg"></div>
+  </div>
+
+  <div class="card">
+    <h2>导入到 iPhone / iPad</h2>
+    <ol class="guide">
+      <li>点上面的按钮下载，或在 Safari 里打开本页后下载</li>
+      <li>打开「<b>文件</b>」App → 「下载」→ 点刚下载的 <code>.ics</code> 文件</li>
+      <li>日历会弹出预览 → 点「<b>添加全部</b>」</li>
+      <li>在预览界面点「日历」<b>选到你的 iCloud 日历</b>（不要选「我的 iPhone」）</li>
+      <li>完成后 1–2 分钟，事件会自动同步到你其他 Apple 设备</li>
+    </ol>
+    <h2 style="margin-top:20px">导入到 Mac</h2>
+    <ol class="guide">
+      <li>先建一个专用日历：日历 App →「文件」→「新建日历」，命名如「课表 2026秋」</li>
+      <li>双击下载的 <code>.ics</code> 文件 → 选择刚建的日历 → 导入</li>
+      <li>（也可以：日历 App →「文件」→「导入」）</li>
+    </ol>
+
+    <div class="nt warn" style="margin-top:16px">
+      <span class="ic">⚠️</span>
+      <span><b>重复导入前请先处理旧日历。</b>日历文件是「新增」语义，不会覆盖上一次导入的事件。
+      如果调了课需要重新导入，建议先：在日历 App 里点底部「日历」→ 点该日历旁的 ⓘ →
+      <b>取消勾选隐藏它</b>（1 步，随时可恢复），确认新课表没问题后再「删除日历」。</span>
+    </div>
+    <div class="nt info">
+      <span class="ic">💡</span>
+      <span><b>建议给这个日历起个明确的名字</b>（如「课表 2026秋」），这样之后要删除或隐藏时一眼就能找到。</span>
+    </div>
+  </div>
+
+  <div class="actions">
+    <button class="ghost" id="btnBack4">← 上一步</button>
+    <button class="ghost right" id="btnRestart">重新开始</button>
+  </div>
+</section>
+
+</main>
+
+<footer>
+  课表导入器 · 单文件版 · 不联网、不上传、不收集任何数据<br>
+  所有计算都在你的浏览器里完成
+</footer>
+
+<script>/*__CORE__*/</script>
+<script>/*__UI__*/</script>
+</body>
+</html>

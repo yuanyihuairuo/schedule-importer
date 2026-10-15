@@ -1,0 +1,25 @@
+# 依赖与缓存
+node_modules/
+.build/
+.swiftpm/
+
+# 系统 / 编辑器
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+*~
+
+# 日志
+*.log
+npm-debug.log*
+yarn-error.log*
+
+# 工具链产物（都能用 npm run 重新生成，不入库）
+preview-*.png
+_tmp/
+
+# 私有目录（如果哪天把别的东西搬进来，别误提交）
+.workbuddy/
+.env
