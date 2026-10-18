@@ -42,7 +42,24 @@ const dom = new JSDOM(fs.readFileSync(HTML_PATH, 'utf8'), {
   runScripts: 'dangerously',
   url: 'http://localhost/',
   pretendToBeVisual: true,
-  virtualConsole: vc
+  virtualConsole: vc,
+  /**
+   * 页面顶层的代码就会用到 TextEncoder / CompressionStream 这些浏览器 API，
+   * 而脚本是在 JSDOM 构造期间同步执行的 —— 等构造完再往 window 上补就晚了
+   * （表现为 window.Core 是 undefined、页面一片空白）。必须在这里补。
+   */
+  beforeParse(window) {
+    window.TextEncoder = TextEncoder;
+    window.TextDecoder = TextDecoder;
+    window.CompressionStream = CompressionStream;
+    window.DecompressionStream = DecompressionStream;
+    window.Response = Response;
+    window.confirm = () => true;
+    window.alert = () => {};
+    window.scrollTo = () => {};
+    window.URL.createObjectURL = () => 'blob:mock';
+    window.URL.revokeObjectURL = () => {};
+  }
 });
 const win = dom.window;
 const doc = win.document;
